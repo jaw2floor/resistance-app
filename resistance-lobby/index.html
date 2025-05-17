@@ -1,0 +1,64 @@
+<!doctype html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Resistance Lobby</title>
+</head>
+<body>
+  <h1>Rooms</h1>
+
+  <!-- CREATE ROOM -->
+  <input id="roomName" placeholder="Room name" />
+  <button id="createBtn">Create room</button>
+
+  <!-- LIST OF ROOMS -->
+  <ul id="list"></ul>
+
+  <script type="module">
+    import { db, auth } from "./firebase.js";
+    import {
+      collection, addDoc, serverTimestamp,
+      query, where, orderBy, onSnapshot
+    } from "firebase/firestore";
+
+    /* ---------- create room ---------- */
+    const createBtn = document.getElementById("createBtn");
+    createBtn.onclick = async () => {
+      const name = document.getElementById("roomName").value.trim();
+      if (!name) return alert("Enter a room name!");
+
+      // 1) make /rooms doc
+      const roomRef = await addDoc(collection(db, "rooms"), {
+        name,
+        status: "lobby",
+        hostId: auth.currentUser.uid,
+        playerCount: 0,
+        createdAt: serverTimestamp(),
+        lastActivity: serverTimestamp(),
+      });
+
+      // 2) go to room page (?id=ROOM_ID)
+      window.location = `room.html?id=${roomRef.id}`;
+    };
+
+    /* ---------- live list of open rooms ---------- */
+    const list = document.getElementById("list");
+    const q = query(
+      collection(db, "rooms"),
+      where("status", "==", "lobby"),
+      orderBy("createdAt", "desc")
+    );
+
+    onSnapshot(q, snap => {
+      list.innerHTML = "";                            // clear
+      snap.forEach(doc => {
+        const li = document.createElement("li");
+        li.textContent = `${doc.data().name} ` +
+                         `(${doc.data().playerCount} players)`;
+        li.style.cursor = "pointer";
+        li.onclick = () => window.location =
+            `room.html?id=${doc.id}`;
+        list.appendChild(li);
+      });
+    });
+  </script>
+</body></html>

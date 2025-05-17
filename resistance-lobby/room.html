@@ -1,0 +1,77 @@
+<!doctype html><html lang="en">
+<head><meta charset="utf-8" /><title>Room</title></head>
+<body>
+  <h1 id="roomTitle">Room</h1>
+
+  <!-- JOIN -->
+  <input id="playerName" placeholder="Your name" />
+  <button id="joinBtn">Join room</button>
+
+  <!-- PLAYERS -->
+  <h2>Players</h2>
+  <ul id="players"></ul>
+
+  <script type="module">
+    import { db, auth } from "./firebase.js";
+    import {
+      doc, collection, setDoc, onSnapshot,
+      updateDoc, increment, deleteDoc, serverTimestamp
+    } from "firebase/firestore";
+
+    /* ---------- grab roomId from URL ---------- */
+    const params  = new URLSearchParams(window.location.search);
+    const roomId  = params.get("id");
+    if (!roomId) { alert("No room id"); history.back(); }
+
+    const roomRef    = doc(db, "rooms", roomId);
+    const playersRef = collection(roomRef, "players");
+    const meRef      = doc(playersRef, auth.currentUser.uid);
+
+    /* ---------- join button ---------- */
+    document.getElementById("joinBtn").onclick = async () => {
+      const name = document.getElementById("playerName").value.trim();
+      if (!name) return alert("Type your name");
+
+      await setDoc(meRef, {
+        displayName: name,
+        joinedAt: serverTimestamp(),
+        isHost: false,
+        isReady: false,
+        role: null
+      });
+
+      await updateDoc(roomRef, {
+        playerCount: increment(1),
+        lastActivity: serverTimestamp(),
+      });
+    };
+
+    /* ---------- live room header ---------- */
+    onSnapshot(roomRef, snap => {
+      document.getElementById("roomTitle").textContent =
+        `Room: ${snap.data().name}`;
+    });
+
+    /* ---------- live players list ---------- */
+    const playersUL = document.getElementById("players");
+    onSnapshot(playersRef, snap => {
+      playersUL.innerHTML = "";
+      snap.forEach(p => {
+        const li = document.createElement("li");
+        li.textContent = p.data().displayName;
+        playersUL.appendChild(li);
+      });
+    });
+
+    /* ---------- leave on tab close ---------- */
+    window.addEventListener("beforeunload", async () => {
+      if ((await meRef.get()).exists()) {
+        await deleteDoc(meRef);
+        await updateDoc(roomRef, {
+          playerCount: increment(-1),
+          lastActivity: serverTimestamp(),
+        });
+      }
+    });
+  </script>
+</body></html>
